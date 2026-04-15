@@ -204,35 +204,40 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
     }
 
     const onPointerDown = (event: PointerEvent) => {
-      const { camera, scene, mesh } = sceneRef.current;
-      if (!camera || !scene || !mesh) {
-        return;
+      try {
+        const { camera, scene, mesh } = sceneRef.current;
+        if (!camera || !scene || !mesh) {
+          return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const pointer = new THREE.Vector2(
+          ((event.clientX - rect.left) / rect.width) * 2 - 1,
+          -((event.clientY - rect.top) / rect.height) * 2 + 1,
+        );
+        const raycaster = raycasterRef.current;
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObject(mesh, true);
+        if (hits.length === 0) {
+          return;
+        }
+        const point = hits[0]?.point;
+        if (
+          !point
+          || !Number.isFinite(point.x)
+          || !Number.isFinite(point.y)
+          || !Number.isFinite(point.z)
+        ) {
+          onSceneError("Spark raycast returned an invalid prompt point. Try clicking a denser region of the splat.");
+          return;
+        }
+        onPromptAdd(
+          [point.x, point.y, point.z],
+          promptMode === "positive" ? 1 : -1,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown click interaction error.";
+        onSceneError(`Click interaction failed: ${message}`);
       }
-      const rect = canvas.getBoundingClientRect();
-      const pointer = new THREE.Vector2(
-        ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        -((event.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const raycaster = raycasterRef.current;
-      raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObject(mesh, true);
-      if (hits.length === 0) {
-        return;
-      }
-      const point = hits[0]?.point;
-      if (
-        !point
-        || !Number.isFinite(point.x)
-        || !Number.isFinite(point.y)
-        || !Number.isFinite(point.z)
-      ) {
-        onSceneError("Spark raycast returned an invalid prompt point. Try clicking a denser region of the splat.");
-        return;
-      }
-      onPromptAdd(
-        [point.x, point.y, point.z],
-        promptMode === "positive" ? 1 : -1,
-      );
     };
 
     canvas.addEventListener("pointerdown", onPointerDown);

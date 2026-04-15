@@ -1,5 +1,6 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { commitMask, createSession, requestPreview } from "./lib/api";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { Inspector } from "./components/Inspector";
 import { SplatWorkspace, type WorkspaceHandle } from "./components/SplatWorkspace";
 import type { PromptMode, PromptPoint } from "./types";
@@ -53,7 +54,7 @@ export default function App() {
     setPrompts((current) => [
       ...current,
       {
-        id: crypto.randomUUID(),
+        id: createPromptId(),
         world,
         label,
       },
@@ -114,59 +115,68 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
-      <input
-        ref={fileInputRef}
-        className="visually-hidden"
-        type="file"
-        accept=".ply"
-        onChange={handleFileSelection}
-      />
+    <AppErrorBoundary>
+      <div className="app-shell">
+        <input
+          ref={fileInputRef}
+          className="visually-hidden"
+          type="file"
+          accept=".ply"
+          onChange={handleFileSelection}
+        />
 
-      <main className="app-grid">
-        <section className="workspace-panel">
-          <SplatWorkspace
-            ref={workspaceRef}
+        <main className="app-grid">
+          <section className="workspace-panel">
+            <SplatWorkspace
+              ref={workspaceRef}
+              promptMode={promptMode}
+              prompts={prompts}
+              onPromptAdd={handlePromptAdd}
+              onSceneError={(message) => {
+                if (message) {
+                  setStatus(message);
+                }
+              }}
+              onSceneReady={(count) => {
+                setTotalCount(count);
+                setVisibleCount(count);
+              }}
+            />
+          </section>
+
+          <Inspector
+            sessionReady={Boolean(sessionId)}
+            sessionId={sessionId}
             promptMode={promptMode}
             prompts={prompts}
-            onPromptAdd={handlePromptAdd}
-            onSceneError={(message) => {
-              if (message) {
-                setStatus(message);
-              }
-            }}
-            onSceneReady={(count) => {
-              setTotalCount(count);
-              setVisibleCount(count);
+            previewImage={previewImage}
+            hasPreview={previewImage !== null}
+            promptCount={prompts.length}
+            visibleCount={visibleCount}
+            totalCount={totalCount}
+            status={status}
+            busyPreview={busyPreview}
+            busyCommit={busyCommit}
+            onChooseFile={() => fileInputRef.current?.click()}
+            onPromptModeChange={setPromptMode}
+            onPreview={handlePreview}
+            onCommit={handleCommit}
+            onClearPrompts={() => {
+              setPrompts([]);
+              setPreviewImage(null);
+              workspaceRef.current?.clearPromptsVisuals();
+              setStatus("Prompt stack cleared.");
             }}
           />
-        </section>
-
-        <Inspector
-          sessionReady={Boolean(sessionId)}
-          sessionId={sessionId}
-          promptMode={promptMode}
-          prompts={prompts}
-          previewImage={previewImage}
-          hasPreview={previewImage !== null}
-          promptCount={prompts.length}
-          visibleCount={visibleCount}
-          totalCount={totalCount}
-          status={status}
-          busyPreview={busyPreview}
-          busyCommit={busyCommit}
-          onChooseFile={() => fileInputRef.current?.click()}
-          onPromptModeChange={setPromptMode}
-          onPreview={handlePreview}
-          onCommit={handleCommit}
-          onClearPrompts={() => {
-            setPrompts([]);
-            setPreviewImage(null);
-            workspaceRef.current?.clearPromptsVisuals();
-            setStatus("Prompt stack cleared.");
-          }}
-        />
-      </main>
-    </div>
+        </main>
+      </div>
+    </AppErrorBoundary>
   );
+}
+
+function createPromptId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
