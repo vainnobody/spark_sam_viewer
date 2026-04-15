@@ -1,0 +1,4 @@
+.sessions/
+backend/app/__pycache__/
+frontend/dist/
+frontend/node_modules/
