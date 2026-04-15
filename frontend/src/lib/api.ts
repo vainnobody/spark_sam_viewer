@@ -27,6 +27,7 @@ export async function createSession(file: File): Promise<SessionCreated> {
 export async function requestPreview(
   sessionId: string,
   camera: CameraPayload,
+  imageDataUrl: string,
   points: PromptPoint[],
 ): Promise<PreviewResponse> {
   const response = await fetch(`/api/sessions/${sessionId}/preview`, {
@@ -36,6 +37,7 @@ export async function requestPreview(
     },
     body: JSON.stringify({
       camera,
+      imageDataUrl,
       points: points.map((point) => ({
         world: point.world,
         label: point.label,

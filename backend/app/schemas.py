@@ -32,6 +32,7 @@ class PromptPoint(BaseModel):
 
 class PreviewRequest(BaseModel):
     camera: CameraPayload
+    imageDataUrl: str = Field(min_length=1)
     points: list[PromptPoint]
 
 

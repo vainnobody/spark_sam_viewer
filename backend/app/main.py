@@ -37,7 +37,7 @@ async def create_session(file: UploadFile = File(...)) -> SessionCreated:
         state = STORE.create_session(file.filename or "upload.ply", payload)
         return SessionCreated(
             sessionId=state.session_id,
-            numSplats=int(state.gaussians.get_xyz.shape[0]),
+            numSplats=state.gaussians.count,
             bbox=STORE.build_bbox(state),
             warnings=[],
         )

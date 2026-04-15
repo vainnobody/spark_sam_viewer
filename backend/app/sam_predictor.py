@@ -5,9 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from . import bootstrap  # noqa: F401
 from .config import SETTINGS
-from sam3 import build_sam3_image_model
 
 
 class SamPredictor:
@@ -29,6 +27,14 @@ class SamPredictor:
         checkpoint_path = Path(checkpoint)
         if not checkpoint_path.exists():
             raise RuntimeError(f"SAM3 checkpoint does not exist: {checkpoint_path}")
+
+        try:
+            from sam3 import build_sam3_image_model
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "The Python package 'sam3' is not installed in the backend environment. "
+                "Install it into this project environment before using preview."
+            ) from exc
 
         model = build_sam3_image_model(
             checkpoint_path=str(checkpoint_path),

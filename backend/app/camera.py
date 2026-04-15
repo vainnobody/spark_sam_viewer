@@ -1,108 +1,87 @@
 from __future__ import annotations
 
-import math
-from types import SimpleNamespace
-
 import numpy as np
-import torch
 
-from . import bootstrap  # noqa: F401
 from .schemas import CameraPayload
-from scene.camera import MiniCam
-from utils.graphics_utils import getProjectionMatrix
 
 
-PIPELINE = SimpleNamespace(
-    compute_cov3d_python=False,
-    convert_shs_python=False,
-    debug=False,
-)
-
-# Three/Spark uses an OpenGL-style camera where forward is -Z and up is +Y.
-# semantic-gaussians expects a COLMAP/OpenCV-style camera where forward is +Z
-# and image-space Y grows downward.
-OPENGL_TO_COLMAP = np.array(
-    [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, -1.0, 0.0, 0.0],
-        [0.0, 0.0, -1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ],
-    dtype=np.float32,
-)
+def _as_matrix(rows: list[list[float]]) -> np.ndarray:
+    return np.asarray(rows, dtype=np.float32)
 
 
-def _as_tensor(matrix: np.ndarray, device: str) -> torch.Tensor:
-    return torch.as_tensor(matrix, dtype=torch.float32, device=device).transpose(0, 1)
-
-
-def get_colmap_world_to_camera(payload: CameraPayload) -> np.ndarray:
-    view_gl = np.asarray(payload.viewMatrix, dtype=np.float32)
-    return OPENGL_TO_COLMAP @ view_gl
-
-
-def build_minicam(payload: CameraPayload, device: str) -> MiniCam:
-    fovx = 2.0 * math.atan(math.tan(payload.fovY * 0.5) * payload.aspect)
-    world_view_transform = _as_tensor(get_colmap_world_to_camera(payload), device)
-    projection_matrix = (
-        getProjectionMatrix(
-            znear=payload.near,
-            zfar=payload.far,
-            fovX=fovx,
-            fovY=payload.fovY,
-        )
-        .transpose(0, 1)
-        .to(device)
-    )
-    full_proj_transform = (
-        world_view_transform.unsqueeze(0).bmm(projection_matrix.unsqueeze(0))
-    ).squeeze(0)
-    return MiniCam(
-        payload.width,
-        payload.height,
-        payload.fovY,
-        fovx,
-        payload.near,
-        payload.far,
-        world_view_transform,
-        full_proj_transform,
-    )
-
-
-def project_points_to_screen(
+def project_world_to_pixels(
     payload: CameraPayload,
     points_world: np.ndarray,
-    depth: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if points_world.size == 0:
-        return np.zeros((0, 2), dtype=np.int32), np.zeros((0,), dtype=bool)
+        empty_pixels = np.zeros((0, 2), dtype=np.int32)
+        empty_depth = np.zeros((0,), dtype=np.float32)
+        empty_inside = np.zeros((0,), dtype=bool)
+        return empty_pixels, empty_depth, empty_inside
 
-    view = get_colmap_world_to_camera(payload)
-    homogeneous = np.concatenate([points_world, np.ones((points_world.shape[0], 1), dtype=np.float32)], axis=1)
-    cam_points = (view @ homogeneous.T).T
-
-    z = cam_points[:, 2]
-    fovx = 2.0 * math.atan(math.tan(payload.fovY * 0.5) * payload.aspect)
-    fx = payload.width / (2.0 * math.tan(fovx * 0.5))
-    fy = payload.height / (2.0 * math.tan(payload.fovY * 0.5))
-    cx = payload.width * 0.5
-    cy = payload.height * 0.5
-
-    u = np.round((cam_points[:, 0] * fx / np.clip(z, 1e-6, None)) + cx).astype(np.int32)
-    v = np.round((cam_points[:, 1] * fy / np.clip(z, 1e-6, None)) + cy).astype(np.int32)
-
-    inside = (
-        (z > 0.01)
-        & (u >= 0)
-        & (v >= 0)
-        & (u < payload.width)
-        & (v < payload.height)
+    view = _as_matrix(payload.viewMatrix)
+    projection = _as_matrix(payload.projectionMatrix)
+    homogeneous = np.concatenate(
+        [points_world.astype(np.float32), np.ones((points_world.shape[0], 1), dtype=np.float32)],
+        axis=1,
     )
 
-    if np.any(inside):
-        sampled_depth = depth[v[inside], u[inside]]
-        depth_ok = z[inside] < np.maximum(sampled_depth, 1e-6) * 1.1
-        inside_indices = np.nonzero(inside)[0]
-        inside[inside_indices] = depth_ok
+    view_space = (view @ homogeneous.T).T
+    clip = (projection @ view_space.T).T
+    w = clip[:, 3]
+    valid_w = np.abs(w) > 1e-6
 
-    return np.stack([u, v], axis=1), inside
+    ndc = np.zeros((points_world.shape[0], 3), dtype=np.float32)
+    ndc[valid_w] = clip[valid_w, :3] / w[valid_w, None]
+
+    x = ndc[:, 0]
+    y = ndc[:, 1]
+    z = ndc[:, 2]
+
+    u = np.round((x * 0.5 + 0.5) * (payload.width - 1)).astype(np.int32)
+    v = np.round((1.0 - (y * 0.5 + 0.5)) * (payload.height - 1)).astype(np.int32)
+
+    inside = (
+        valid_w
+        & (x >= -1.0)
+        & (x <= 1.0)
+        & (y >= -1.0)
+        & (y <= 1.0)
+        & (z >= -1.0)
+        & (z <= 1.0)
+        & (u >= 0)
+        & (u < payload.width)
+        & (v >= 0)
+        & (v < payload.height)
+    )
+    pixels = np.stack([u, v], axis=1)
+    return pixels, z.astype(np.float32), inside
+
+
+def build_depth_buffer(
+    payload: CameraPayload,
+    points_world: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    pixels, depth, inside = project_world_to_pixels(payload, points_world)
+    depth_buffer = np.full((payload.height, payload.width), np.inf, dtype=np.float32)
+
+    if np.any(inside):
+        inside_pixels = pixels[inside]
+        np.minimum.at(depth_buffer, (inside_pixels[:, 1], inside_pixels[:, 0]), depth[inside])
+
+    return pixels, depth, inside, depth_buffer
+
+
+def compute_visible_mask(
+    pixels: np.ndarray,
+    depth: np.ndarray,
+    inside: np.ndarray,
+    depth_buffer: np.ndarray,
+    tolerance: float = 1e-4,
+) -> np.ndarray:
+    visible = inside.copy()
+    if np.any(inside):
+        inside_idx = np.nonzero(inside)[0]
+        pixel_depth = depth_buffer[pixels[inside, 1], pixels[inside, 0]]
+        visible[inside_idx] = depth[inside] <= (pixel_depth + tolerance)
+    return visible

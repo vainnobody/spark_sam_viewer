@@ -26,6 +26,7 @@ type WorkspaceProps = {
 export type WorkspaceHandle = {
   loadFile: (file: File) => Promise<void>;
   buildCameraPayload: () => CameraPayload | null;
+  captureViewImage: () => string | null;
   applyVisibleMask: (encoded: string) => void;
   clearPromptsVisuals: () => void;
 };
@@ -299,6 +300,14 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
           viewMatrix: matrixToRows(camera.matrixWorldInverse),
           projectionMatrix: matrixToRows(camera.projectionMatrix),
         };
+      },
+
+      captureViewImage() {
+        const canvas = canvasRef.current;
+        if (!canvas) {
+          return null;
+        }
+        return canvas.toDataURL("image/jpeg", 0.9);
       },
 
       applyVisibleMask(encoded: string) {

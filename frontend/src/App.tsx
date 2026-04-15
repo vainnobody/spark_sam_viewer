@@ -65,7 +65,8 @@ export default function App() {
       return;
     }
     const camera = workspaceRef.current.buildCameraPayload();
-    if (!camera) {
+    const imageDataUrl = workspaceRef.current.captureViewImage();
+    if (!camera || !imageDataUrl) {
       setStatus("Viewer camera is not ready.");
       return;
     }
@@ -73,7 +74,7 @@ export default function App() {
     setBusyPreview(true);
     setStatus("Projecting prompts and requesting segmentation preview…");
     try {
-      const response = await requestPreview(sessionId, camera, prompts);
+      const response = await requestPreview(sessionId, camera, imageDataUrl, prompts);
       setPreviewImage(response.previewImage);
       setVisibleCount(response.visibleCount);
       setStatus(`Preview ready. ${response.previewCount.toLocaleString()} splats matched.`);

@@ -1,6 +1,6 @@
 # spark_sam_viewer
 
-Interactive local 3DGS segmentation tool built with a Spark frontend and a FastAPI backend.
+Interactive local 3DGS segmentation tool built as a standalone Spark frontend + FastAPI backend project.
 
 V1 scope:
 
@@ -14,36 +14,32 @@ V1 scope:
 ## Architecture
 
 - `frontend/`: Vite + React + `@sparkjsdev/spark`
-- `backend/`: FastAPI + `semantic-gaussians` renderer + local `sam3`
+- `backend/`: FastAPI + in-project 3DGS PLY parser / projector + SAM3 predictor
 
-The browser is responsible for realtime viewport interaction and prompt picking. Segmentation is asynchronous: the frontend sends the current camera and 3D prompt positions to the backend, the backend renders the matching 2D view, runs SAM3, projects the 2D mask back to visible gaussians, and returns a preview.
+The browser is responsible for realtime viewport interaction and prompt picking. Segmentation is asynchronous: the frontend sends the current camera, the current Spark viewport screenshot, and 3D prompt positions to the backend. The backend runs SAM3 on that screenshot, projects the 3D gaussians into the same camera, applies a simple z-buffer over gaussian centers, and maps the 2D mask back to the current visible 3D set.
 
 ## Requirements
 
 - Python 3.10+
 - Node.js 18+
-- CUDA-capable GPU
-- local `semantic-gaussians/` repo under the same `/Users/lanjie/Proj/3dgs` workspace, or override with env vars below
-- local `sam3/` repo under the same `/Users/lanjie/Proj/3dgs` workspace, or override with env vars below
+- CUDA-capable GPU for SAM3 inference
 - a local SAM3 checkpoint file
+- an importable Python package named `sam3` in the backend environment
 
 Important:
 
-- the backend depends on `semantic-gaussians`, which uses CUDA-only rasterization extensions in this repo layout
 - use Python 3.11 or 3.12 for the backend environment; do not use Python 3.14 for this stack
 - `SAM3_CHECKPOINT` must point to an existing local checkpoint path; this project does not download weights automatically
 - uploaded `.ply` files must be 3DGS splat PLYs with gaussian attributes, not generic point cloud PLYs
 - backend PyTorch is pinned to `torch==2.7.0+cu118`
+- this repo no longer imports code from sibling repositories at runtime
 
 ## Environment
 
 Backend reads these variables:
 
 - `SAM3_CHECKPOINT`: absolute path to the local SAM3 checkpoint
-- `SPARK_SAM_VIEWER_DEVICE`: device string used for SAM3 loading; keep this on CUDA for the default repo stack
-- `SPARK_SAM_VIEWER_REPO_ROOT`: override repo root if `semantic-gaussians/` and `sam3/` are elsewhere
-- `SPARK_SAM_VIEWER_SEMANTIC_ROOT`: explicit path to `semantic-gaussians`
-- `SPARK_SAM_VIEWER_SAM3_ROOT`: explicit path to `sam3`
+- `SPARK_SAM_VIEWER_DEVICE`: device string used for SAM3 loading
 - `SPARK_SAM_VIEWER_SESSION_ROOT`: where uploaded session files and exports are staged
 - `SPARK_SAM_VIEWER_CORS_ORIGIN`: CORS origin, defaults to `*`
 
@@ -78,6 +74,8 @@ The requirements file pulls PyTorch from the CUDA 11.8 wheel index and pins:
 ```text
 torch==2.7.0+cu118
 ```
+
+The backend also expects the `sam3` Python package to be installed into the same environment. This project does not add sibling repository paths to `sys.path`.
 
 Start the API:
 
@@ -121,6 +119,7 @@ The frontend dev server runs on `http://127.0.0.1:5173` by default and proxies `
 ## Notes
 
 - The right panel preview is view-dependent by design.
+- The preview mask is generated from the current Spark canvas image, then mapped back onto the uploaded 3DGS points with projective visibility.
 - `Union` builds the kept selection over time.
 - `Invert` removes the current preview from the visible selection.
 - `Reset` restores full visibility and clears the committed selection state.
