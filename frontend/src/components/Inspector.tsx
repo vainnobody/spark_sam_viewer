@@ -136,7 +136,7 @@ export function Inspector(props: InspectorProps) {
                 <div>
                   <strong>{prompt.label > 0 ? "Keep" : "Reject"}</strong>
                   <p>
-                    #{index + 1} · {prompt.world.map((value) => value.toFixed(3)).join(", ")}
+                    #{index + 1} · {prompt.world.map(formatCoord).join(", ")}
                   </p>
                 </div>
               </div>
@@ -161,4 +161,8 @@ export function Inspector(props: InspectorProps) {
       </div>
     </aside>
   );
+}
+
+function formatCoord(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(3) : "invalid";
 }

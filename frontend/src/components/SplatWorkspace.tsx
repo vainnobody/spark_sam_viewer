@@ -184,6 +184,9 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
     }
     disposeGroup(markers);
     prompts.forEach((prompt) => {
+      if (prompt.world.some((value) => !Number.isFinite(value))) {
+        return;
+      }
       const geometry = new THREE.SphereGeometry(0.026, 18, 18);
       const material = new THREE.MeshBasicMaterial({
         color: prompt.label > 0 ? "#ff6a3d" : "#2dc6ff",
@@ -216,7 +219,16 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
       if (hits.length === 0) {
         return;
       }
-      const point = hits[0].point;
+      const point = hits[0]?.point;
+      if (
+        !point
+        || !Number.isFinite(point.x)
+        || !Number.isFinite(point.y)
+        || !Number.isFinite(point.z)
+      ) {
+        onSceneError("Spark raycast returned an invalid prompt point. Try clicking a denser region of the splat.");
+        return;
+      }
       onPromptAdd(
         [point.x, point.y, point.z],
         promptMode === "positive" ? 1 : -1,
