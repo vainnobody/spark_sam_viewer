@@ -30,8 +30,10 @@ The browser is responsible for realtime viewport interaction and prompt picking.
 Important:
 
 - the backend depends on `semantic-gaussians`, which uses CUDA-only rasterization extensions in this repo layout
+- use Python 3.11 or 3.12 for the backend environment; do not use Python 3.14 for this stack
 - `SAM3_CHECKPOINT` must point to an existing local checkpoint path; this project does not download weights automatically
 - uploaded `.ply` files must be 3DGS splat PLYs with gaussian attributes, not generic point cloud PLYs
+- backend PyTorch is pinned to `torch==2.7.0+cu118`
 
 ## Environment
 
@@ -59,6 +61,22 @@ Install backend dependencies in your Python environment:
 ```bash
 cd /Users/lanjie/Proj/3dgs/spark_sam_viewer/backend
 pip install -r requirements.txt
+```
+
+If you are provisioning a fresh server, prefer a Python 3.11 virtual environment:
+
+```bash
+cd /Users/lanjie/Proj/3dgs/spark_sam_viewer/backend
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -r requirements.txt
+```
+
+The requirements file pulls PyTorch from the CUDA 11.8 wheel index and pins:
+
+```text
+torch==2.7.0+cu118
 ```
 
 Start the API:
