@@ -6,7 +6,6 @@ import {
 } from "react";
 import * as THREE from "three";
 import {
-  RgbaArray,
   SparkControls,
   SparkRenderer,
   SplatMesh,
@@ -38,8 +37,7 @@ type SceneRefs = {
   controls: SparkControls | null;
   spark: SparkRenderer | null;
   mesh: SplatMesh | null;
-  rgbaArray: RgbaArray | null;
-  baseBytes: Uint8Array | null;
+  originalOpacity: Float32Array | null;
   numSplats: number;
   markers: THREE.Group | null;
   animationId: number | null;
@@ -49,25 +47,43 @@ type PackedSplatsHandle = {
   numSplats: number;
 };
 
-type MutableRgbaArray = RgbaArray & {
-  fromPackedSplats: (args: {
-    packedSplats: PackedSplatsHandle;
-    base: number;
-    count: number;
-    renderer: THREE.WebGLRenderer;
-  }) => void;
-  read: () => Promise<ArrayBuffer>;
-  ensureCapacity: (count: number) => Uint8Array;
-  count: number;
+type PackedSplatRecord = {
+  center: THREE.Vector3;
+  scales: THREE.Vector3;
+  quaternion: THREE.Quaternion;
+  opacity: number;
+  color: THREE.Color;
+};
+
+type MutablePackedSplats = {
   needsUpdate: boolean;
+  getSplat: (index: number) => PackedSplatRecord;
+  setSplat: (
+    index: number,
+    center: THREE.Vector3,
+    scales: THREE.Vector3,
+    quaternion: THREE.Quaternion,
+    opacity: number,
+    color: THREE.Color,
+  ) => void;
 };
 
 type MutableSplatMesh = SplatMesh & {
   initialized: Promise<unknown>;
-  packedSplats?: PackedSplatsHandle;
-  splatRgba?: RgbaArray;
+  packedSplats?: PackedSplatsHandle & MutablePackedSplats;
   needsUpdate: boolean;
   updateGenerator: () => void;
+  updateVersion?: () => void;
+  forEachSplat?: (
+    callback: (
+      index: number,
+      center: THREE.Vector3,
+      scales: THREE.Vector3,
+      quaternion: THREE.Quaternion,
+      opacity: number,
+      color: THREE.Color,
+    ) => void,
+  ) => void;
   getBoundingBox: (includeAll?: boolean) => THREE.Box3;
 };
 
@@ -84,8 +100,7 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
     controls: null,
     spark: null,
     mesh: null,
-    rgbaArray: null,
-    baseBytes: null,
+    originalOpacity: null,
     numSplats: 0,
     markers: null,
     animationId: null,
@@ -158,7 +173,6 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
       }
       disposeGroup(markers);
       sceneRef.current.mesh?.dispose();
-      sceneRef.current.rgbaArray?.dispose();
       renderer.dispose();
     };
   }, []);
@@ -217,8 +231,8 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
     ref,
     () => ({
       async loadFile(file: File) {
-        const { scene, mesh: currentMesh, renderer, camera, controls, markers } = sceneRef.current;
-        if (!scene || !renderer || !camera || !controls || !markers) {
+        const { scene, mesh: currentMesh, camera, controls, markers } = sceneRef.current;
+        if (!scene || !camera || !controls || !markers) {
           throw new Error("Workspace is not initialized.");
         }
 
@@ -227,9 +241,7 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
           currentMesh.dispose();
         }
         disposeGroup(markers);
-        sceneRef.current.rgbaArray?.dispose();
-        sceneRef.current.baseBytes = null;
-        sceneRef.current.rgbaArray = null;
+        sceneRef.current.originalOpacity = null;
         sceneRef.current.mesh = null;
         sceneRef.current.numSplats = 0;
         onSceneError(null);
@@ -239,7 +251,6 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
           const mesh = new SplatMesh({
             fileBytes,
             fileName: file.name,
-            lod: true,
             raycastable: true,
           }) as MutableSplatMesh;
           await mesh.initialized;
@@ -248,22 +259,9 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
             throw new Error("Spark did not expose packed splats for this file.");
           }
 
-          const rgbaArray = new RgbaArray() as MutableRgbaArray;
-          rgbaArray.fromPackedSplats({
-            packedSplats,
-            base: 0,
-            count: packedSplats.numSplats,
-            renderer,
-          });
-          const baseBytes = new Uint8Array(await rgbaArray.read());
-          mesh.splatRgba = rgbaArray;
-          mesh.updateGenerator();
-          mesh.needsUpdate = true;
-
           scene.add(mesh);
           sceneRef.current.mesh = mesh;
-          sceneRef.current.rgbaArray = rgbaArray;
-          sceneRef.current.baseBytes = baseBytes;
+          sceneRef.current.originalOpacity = extractOriginalOpacity(mesh, packedSplats.numSplats);
           sceneRef.current.numSplats = packedSplats.numSplats;
           fitCameraToMesh(camera, controls, mesh);
           onSceneReady(packedSplats.numSplats);
@@ -311,22 +309,30 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
       },
 
       applyVisibleMask(encoded: string) {
-        const { rgbaArray, baseBytes, numSplats, mesh } = sceneRef.current;
-        if (!rgbaArray || !baseBytes || !mesh) {
+        const { originalOpacity, numSplats, mesh } = sceneRef.current;
+        if (!originalOpacity || !mesh) {
           return;
         }
-        const rgba = rgbaArray as MutableRgbaArray;
         const mutableMesh = mesh as MutableSplatMesh;
-        const mask = decodeMaskBitset(encoded, numSplats);
-        const nextBytes = new Uint8Array(baseBytes);
-        for (let index = 0; index < numSplats; index += 1) {
-          nextBytes[index * 4 + 3] = mask[index] ? baseBytes[index * 4 + 3] : 0;
+        const packedSplats = mutableMesh.packedSplats;
+        if (!packedSplats) {
+          return;
         }
-        const destination = rgba.ensureCapacity(numSplats);
-        destination.set(nextBytes);
-        rgba.count = numSplats;
-        rgba.needsUpdate = true;
+        const mask = decodeMaskBitset(encoded, numSplats);
+        for (let index = 0; index < numSplats; index += 1) {
+          const splat = packedSplats.getSplat(index);
+          packedSplats.setSplat(
+            index,
+            splat.center,
+            splat.scales,
+            splat.quaternion,
+            mask[index] ? originalOpacity[index] : 0,
+            splat.color,
+          );
+        }
+        packedSplats.needsUpdate = true;
         mutableMesh.needsUpdate = true;
+        mutableMesh.updateVersion?.();
       },
 
       clearPromptsVisuals() {
@@ -348,6 +354,25 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
     </div>
   );
 });
+
+function extractOriginalOpacity(mesh: MutableSplatMesh, count: number): Float32Array {
+  const opacity = new Float32Array(count);
+  if (mesh.forEachSplat) {
+    mesh.forEachSplat((index, _center, _scales, _quaternion, splatOpacity) => {
+      opacity[index] = splatOpacity;
+    });
+    return opacity;
+  }
+
+  const packedSplats = mesh.packedSplats;
+  if (!packedSplats) {
+    return opacity;
+  }
+  for (let index = 0; index < count; index += 1) {
+    opacity[index] = packedSplats.getSplat(index).opacity;
+  }
+  return opacity;
+}
 
 function disposeGroup(group: THREE.Group) {
   while (group.children.length > 0) {
