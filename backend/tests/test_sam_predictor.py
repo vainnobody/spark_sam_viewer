@@ -2,6 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import sys
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -33,3 +34,32 @@ def test_prepare_interactive_predictor_fails_without_any_backbone():
 
     with pytest.raises(RuntimeError, match="without a backbone"):
         SamPredictor()._prepare_interactive_predictor(model)
+
+
+def test_predict_mask_uses_image_relative_point_normalization():
+    predictor = SimpleNamespace()
+    predictor.set_image = lambda image: None
+    predictor.predict_calls = []
+
+    def fake_predict(**kwargs):
+        predictor.predict_calls.append(kwargs)
+        return (
+            np.asarray([[[True, False], [False, False]]], dtype=bool),
+            np.asarray([0.9], dtype=np.float32),
+            np.asarray([[[1.0, 0.0], [0.0, 0.0]]], dtype=np.float32),
+        )
+
+    predictor.predict = fake_predict
+
+    sam_predictor = SamPredictor()
+    sam_predictor._predictor = predictor
+
+    mask = sam_predictor.predict_mask(
+        np.zeros((32, 48, 3), dtype=np.uint8),
+        np.asarray([[12, 8]], dtype=np.int32),
+        np.asarray([1], dtype=np.int32),
+    )
+
+    assert mask.shape == (2, 2)
+    assert len(predictor.predict_calls) == 1
+    assert predictor.predict_calls[0]["normalize_coords"] is True

@@ -142,7 +142,7 @@ class SamPredictor:
             point_coords=prompt_pixels.astype(np.float32),
             point_labels=(prompt_labels > 0).astype(np.int32),
             multimask_output=multimask,
-            normalize_coords=False,
+            normalize_coords=True,
         )
         best_index = int(np.argmax(scores))
         return masks[best_index].astype(np.uint8)
