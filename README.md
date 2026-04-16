@@ -24,7 +24,7 @@ The browser is responsible for realtime viewport interaction and prompt picking.
 - Node.js 18+
 - CUDA-capable GPU for SAM3 inference
 - a local SAM3 checkpoint file
-- an importable Python package named `sam3` in the backend environment
+- either an importable Python package named `sam3`, or the in-repo checkout at `/Users/lanjie/Proj/3dgs/sam3`
 
 Important:
 
@@ -32,7 +32,7 @@ Important:
 - `SAM3_CHECKPOINT` must point to an existing local checkpoint path; this project does not download weights automatically
 - uploaded `.ply` files must be 3DGS splat PLYs with gaussian attributes, not generic point cloud PLYs
 - backend PyTorch is pinned to `torch==2.7.0+cu118`
-- this repo no longer imports code from sibling repositories at runtime
+- backend auto-detects the in-repo SAM3 checkout at `/Users/lanjie/Proj/3dgs/sam3`
 
 ## Environment
 
@@ -75,7 +75,7 @@ The requirements file pulls PyTorch from the CUDA 11.8 wheel index and pins:
 torch==2.7.0+cu118
 ```
 
-The backend also expects the `sam3` Python package to be installed into the same environment. This project does not add sibling repository paths to `sys.path`.
+The backend first tries to import `sam3` from the active Python environment. If that fails, it automatically adds the in-repo checkout at `/Users/lanjie/Proj/3dgs/sam3` to `sys.path`. The server environment still needs the SAM3 runtime dependencies installed.
 
 Start the API:
 

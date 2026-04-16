@@ -1,11 +1,82 @@
 from __future__ import annotations
 
+import importlib
+import sys
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 from PIL import Image
 
 from .config import SETTINGS
+
+
+def _workspace_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _local_sam3_project_root() -> Path:
+    return _workspace_root() / "sam3"
+
+
+def _import_sam3_builder() -> Callable[..., object]:
+    module = importlib.import_module("sam3")
+    builder = getattr(module, "build_sam3_image_model", None)
+    if builder is None:
+        module_file = getattr(module, "__file__", None)
+        module_paths = ", ".join(str(path) for path in getattr(module, "__path__", []))
+        raise ImportError(
+            "Imported 'sam3' but it did not expose build_sam3_image_model. "
+            f"module_file={module_file!r}, module_paths={module_paths or '<none>'}"
+        )
+    return builder
+
+
+def _resolve_sam3_builder() -> Callable[..., object]:
+    try:
+        return _import_sam3_builder()
+    except ModuleNotFoundError as exc:
+        if exc.name != "sam3":
+            raise RuntimeError(
+                "SAM3 import failed because a required dependency is missing: "
+                f"{exc.name!r}. Install the backend requirements in the server environment."
+            ) from exc
+        initial_error: Exception = exc
+    except ImportError as exc:
+        initial_error = exc
+
+    local_root = _local_sam3_project_root()
+    local_init = local_root / "sam3" / "__init__.py"
+    if not local_init.exists():
+        raise RuntimeError(
+            "The Python package 'sam3' is not importable in the backend environment, and no local "
+            f"SAM3 checkout was found at {local_root}."
+        ) from initial_error
+
+    local_root_str = str(local_root)
+    if local_root_str not in sys.path:
+        sys.path.insert(0, local_root_str)
+    sys.modules.pop("sam3", None)
+    importlib.invalidate_caches()
+
+    try:
+        return _import_sam3_builder()
+    except ModuleNotFoundError as exc:
+        if exc.name == "sam3":
+            raise RuntimeError(
+                "Found a local SAM3 checkout at "
+                f"{local_root}, but it still was not importable after adding it to sys.path."
+            ) from exc
+        raise RuntimeError(
+            "Found a local SAM3 checkout at "
+            f"{local_root}, but importing it failed because dependency {exc.name!r} is missing. "
+            "Install the backend requirements in the server environment."
+        ) from exc
+    except ImportError as exc:
+        raise RuntimeError(
+            "Found a local SAM3 checkout at "
+            f"{local_root}, but importing it failed: {exc}"
+        ) from exc
 
 
 class SamPredictor:
@@ -28,14 +99,7 @@ class SamPredictor:
         if not checkpoint_path.exists():
             raise RuntimeError(f"SAM3 checkpoint does not exist: {checkpoint_path}")
 
-        try:
-            from sam3 import build_sam3_image_model
-        except ModuleNotFoundError as exc:
-            raise RuntimeError(
-                "The Python package 'sam3' is not installed in the backend environment. "
-                "Install it into this project environment before using preview."
-            ) from exc
-
+        build_sam3_image_model = _resolve_sam3_builder()
         model = build_sam3_image_model(
             checkpoint_path=str(checkpoint_path),
             load_from_HF=False,
