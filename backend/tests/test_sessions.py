@@ -81,13 +81,13 @@ def test_commit_requires_preview_for_isolate_and_invert():
         store.commit("test-session", "invert")
 
 
-def test_map_mask_to_gaussians_uses_full_point_cloud_indices():
+def test_map_mask_to_gaussians_only_targets_current_visible_indices():
     store, state = make_store_with_state(np.asarray([True, False, True]))
 
     preview_mask = store._map_mask_to_gaussians(
         state,
-        visible_pixels=np.asarray([[0, 0], [1, 0], [0, 1]], dtype=np.int32),
-        visible_on_screen=np.asarray([True, True, False]),
+        visible_pixels=np.asarray([[0, 0], [1, 0]], dtype=np.int32),
+        visible_on_screen=np.asarray([True, True]),
         mask_2d=np.asarray(
             [
                 [0, 1],
@@ -97,4 +97,4 @@ def test_map_mask_to_gaussians_uses_full_point_cloud_indices():
         ),
     )
 
-    assert preview_mask.tolist() == [False, True, False]
+    assert preview_mask.tolist() == [False, False, True]

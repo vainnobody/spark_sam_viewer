@@ -86,7 +86,8 @@ class SessionStore:
                     "Refresh the view and retry."
                 )
 
-            pixels, depth, inside, depth_buffer = build_depth_buffer(payload.camera, state.gaussians.xyz)
+            visible_points = state.gaussians.xyz[state.current_visible_mask]
+            pixels, depth, inside, depth_buffer = build_depth_buffer(payload.camera, visible_points)
             visible_on_screen = compute_visible_mask(pixels, depth, inside, depth_buffer)
 
             prompt_world = np.asarray([point.world for point in payload.points], dtype=np.float32)
@@ -182,13 +183,14 @@ class SessionStore:
         visible_on_screen: np.ndarray,
         mask_2d: np.ndarray,
     ) -> np.ndarray:
+        visible_indices = np.nonzero(state.current_visible_mask)[0]
         preview_mask = np.zeros_like(state.current_visible_mask)
         candidate = visible_on_screen.copy()
         if np.any(candidate):
             u = visible_pixels[candidate, 0]
             v = visible_pixels[candidate, 1]
             hits = mask_2d[v, u] > 0
-            preview_mask[np.nonzero(candidate)[0][hits]] = True
+            preview_mask[visible_indices[np.nonzero(candidate)[0][hits]]] = True
         return preview_mask
 
     def _render_preview_image(

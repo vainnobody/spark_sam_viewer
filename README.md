@@ -119,8 +119,8 @@ The frontend dev server runs on `http://127.0.0.1:5173` by default and proxies `
 ## Notes
 
 - The right panel preview is view-dependent by design.
-- The preview mask is generated from the current Spark canvas image, then mapped back onto the uploaded 3DGS points with projective visibility.
-- `Isolate` hides every splat outside the current preview mask.
+- The preview mask is generated from the current Spark canvas image, then mapped back onto the currently visible 3DGS points with projective visibility.
+- `Isolate` hides every currently visible splat outside the current preview mask.
 - `Invert` removes the current preview from the visible selection.
 - `Reset` restores full visibility and clears the committed selection state.
 
