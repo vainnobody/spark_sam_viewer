@@ -75,7 +75,9 @@ a {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
-  min-height: calc(100vh - 36px);
+  height: calc(100vh - 36px);
+  min-height: 0;
+  align-items: stretch;
 }
 
 .workspace-panel,
@@ -86,7 +88,7 @@ a {
 .workspace-shell {
   position: relative;
   height: 100%;
-  min-height: 70vh;
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: 26px;
   overflow: hidden;
@@ -131,12 +133,15 @@ a {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  height: 100%;
+  min-height: 0;
   padding: 22px;
   border-radius: 26px;
   border: 1px solid var(--border);
   background: var(--panel);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
 .inspector__hero h1 {
@@ -160,10 +165,21 @@ a {
 .status-copy,
 .empty-copy,
 .prompt-row p,
-.preview-header span {
+.preview-header span,
+.section-count {
   margin: 0;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.inspector__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 .inspector__section {
@@ -205,7 +221,8 @@ a {
 .action-row,
 .action-grid,
 .metric-row,
-.preview-header {
+.preview-header,
+.section-heading {
   display: flex;
   gap: 10px;
 }
@@ -236,6 +253,11 @@ a {
   align-items: baseline;
 }
 
+.section-heading {
+  justify-content: space-between;
+  align-items: center;
+}
+
 .preview-panel {
   min-height: 0;
 }
@@ -261,8 +283,9 @@ a {
 .prompt-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 180px;
+  gap: 8px;
+  max-height: 152px;
+  min-height: 0;
   overflow: auto;
   padding-right: 4px;
 }
@@ -270,16 +293,16 @@ a {
 .prompt-row {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
+  gap: 10px;
+  align-items: center;
 }
 
 .prompt-dot {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  margin-top: 6px;
   box-shadow: 0 0 20px rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
 }
 
 .prompt-dot.positive {
@@ -290,11 +313,31 @@ a {
   background: var(--accent-cool);
 }
 
+.prompt-row__content {
+  min-width: 0;
+}
+
+.prompt-row__content strong,
+.prompt-row__meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-row__content strong {
+  font-size: 0.92rem;
+}
+
+.prompt-row__meta {
+  font-size: 0.84rem;
+}
+
 .inspector__footer {
-  margin-top: auto;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
+  padding-top: 2px;
 }
 
 .download-link {
@@ -345,6 +388,7 @@ button:disabled {
 
   .app-grid {
     grid-template-columns: 1fr;
+    height: auto;
     min-height: auto;
   }
 
@@ -353,6 +397,13 @@ button:disabled {
   }
 
   .inspector {
+    height: auto;
     padding: 18px;
+    overflow: visible;
+  }
+
+  .inspector__body {
+    overflow: visible;
+    padding-right: 0;
   }
 }

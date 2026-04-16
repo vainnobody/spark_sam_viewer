@@ -52,96 +52,99 @@ export function Inspector(props: InspectorProps) {
         </p>
       </div>
 
-      <div className="inspector__section">
-        <button className="primary-button" onClick={onChooseFile}>
-          Load 3DGS PLY
-        </button>
-        <div className="metric-row">
-          <span>Prompts</span>
-          <strong>{promptCount}</strong>
+      <div className="inspector__body">
+        <div className="inspector__section">
+          <button className="primary-button" onClick={onChooseFile}>
+            Load 3DGS PLY
+          </button>
+          <div className="metric-row">
+            <span>Prompts</span>
+            <strong>{promptCount}</strong>
+          </div>
+          <div className="metric-row">
+            <span>Visible splats</span>
+            <strong>
+              {visibleCount === null || totalCount === null ? "—" : `${visibleCount.toLocaleString()} / ${totalCount.toLocaleString()}`}
+            </strong>
+          </div>
+          <p className="status-copy">{status}</p>
         </div>
-        <div className="metric-row">
-          <span>Visible splats</span>
-          <strong>
-            {visibleCount === null || totalCount === null ? "—" : `${visibleCount.toLocaleString()} / ${totalCount.toLocaleString()}`}
-          </strong>
-        </div>
-        <p className="status-copy">{status}</p>
-      </div>
 
-      <div className="inspector__section">
-        <p className="section-label">Prompt polarity</p>
-        <div className="segmented">
-          <button
-            className={promptMode === "positive" ? "is-active" : ""}
-            onClick={() => onPromptModeChange("positive")}
-          >
-            Positive
-          </button>
-          <button
-            className={promptMode === "negative" ? "is-active" : ""}
-            onClick={() => onPromptModeChange("negative")}
-          >
-            Negative
-          </button>
+        <div className="inspector__section">
+          <p className="section-label">Prompt polarity</p>
+          <div className="segmented">
+            <button
+              className={promptMode === "positive" ? "is-active" : ""}
+              onClick={() => onPromptModeChange("positive")}
+            >
+              Positive
+            </button>
+            <button
+              className={promptMode === "negative" ? "is-active" : ""}
+              onClick={() => onPromptModeChange("negative")}
+            >
+              Negative
+            </button>
+          </div>
+          <div className="action-row">
+            <button disabled={!sessionReady || promptCount === 0 || busyPreview} onClick={onPreview}>
+              {busyPreview ? "Previewing…" : "Preview"}
+            </button>
+            <button disabled={promptCount === 0} onClick={onClearPrompts}>
+              Clear points
+            </button>
+          </div>
         </div>
-        <div className="action-row">
-          <button disabled={!sessionReady || promptCount === 0 || busyPreview} onClick={onPreview}>
-            {busyPreview ? "Previewing…" : "Preview"}
-          </button>
-          <button disabled={promptCount === 0} onClick={onClearPrompts}>
-            Clear points
-          </button>
-        </div>
-      </div>
 
-      <div className="inspector__section">
-        <p className="section-label">Selection flow</p>
-        <div className="action-grid">
-          <button disabled={!sessionReady || !hasPreview || busyCommit} onClick={() => onCommit("isolate")}>
-            {busyCommit ? "Applying…" : "Isolate"}
-          </button>
-          <button disabled={!sessionReady || !hasPreview || busyCommit} onClick={() => onCommit("invert")}>
-            Invert
-          </button>
-          <button disabled={!sessionReady || busyCommit} onClick={() => onCommit("reset")}>
-            Reset
-          </button>
+        <div className="inspector__section">
+          <p className="section-label">Selection flow</p>
+          <div className="action-grid">
+            <button disabled={!sessionReady || !hasPreview || busyCommit} onClick={() => onCommit("isolate")}>
+              {busyCommit ? "Applying…" : "Isolate"}
+            </button>
+            <button disabled={!sessionReady || !hasPreview || busyCommit} onClick={() => onCommit("invert")}>
+              Invert
+            </button>
+            <button disabled={!sessionReady || busyCommit} onClick={() => onCommit("reset")}>
+              Reset
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="inspector__section preview-panel">
-        <div className="preview-header">
-          <p className="section-label">Preview</p>
-          <span>{previewImage ? "Current view" : "Awaiting request"}</span>
+        <div className="inspector__section preview-panel">
+          <div className="preview-header">
+            <p className="section-label">Preview</p>
+            <span>{previewImage ? "Current view" : "Awaiting request"}</span>
+          </div>
+          <div className={`preview-frame ${previewImage ? "has-image" : ""}`}>
+            {previewImage ? (
+              <img src={previewImage} alt="Segmentation preview" />
+            ) : (
+              <p>Preview overlays land here after a segmentation request.</p>
+            )}
+          </div>
         </div>
-        <div className={`preview-frame ${previewImage ? "has-image" : ""}`}>
-          {previewImage ? (
-            <img src={previewImage} alt="Segmentation preview" />
-          ) : (
-            <p>Preview overlays land here after a segmentation request.</p>
-          )}
-        </div>
-      </div>
 
-      <div className="inspector__section">
-        <p className="section-label">Prompt stack</p>
-        <div className="prompt-list">
-          {prompts.length === 0 ? (
-            <p className="empty-copy">Click directly on the splats to add prompts.</p>
-          ) : (
-            prompts.map((prompt, index) => (
-              <div className="prompt-row" key={prompt.id}>
-                <span className={`prompt-dot ${prompt.label > 0 ? "positive" : "negative"}`} />
-                <div>
-                  <strong>{prompt.label > 0 ? "Keep" : "Reject"}</strong>
-                  <p>
-                    #{index + 1} · {prompt.world.map(formatCoord).join(", ")}
-                  </p>
+        <div className="inspector__section prompt-stack-section">
+          <div className="section-heading">
+            <p className="section-label">Prompt stack</p>
+            <span className="section-count">({promptCount})</span>
+          </div>
+          <div className="prompt-list">
+            {prompts.length === 0 ? (
+              <p className="empty-copy">Click directly on the splats to add prompts.</p>
+            ) : (
+              prompts.map((prompt, index) => (
+                <div className="prompt-row" key={prompt.id}>
+                  <span className={`prompt-dot ${prompt.label > 0 ? "positive" : "negative"}`} />
+                  <div className="prompt-row__content">
+                    <strong>{`#${index + 1} · ${prompt.label > 0 ? "Keep" : "Reject"}`}</strong>
+                    <p className="prompt-row__meta">{prompt.world.map(formatCoord).join(", ")}</p>
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
 
@@ -164,5 +167,5 @@ export function Inspector(props: InspectorProps) {
 }
 
 function formatCoord(value: number): string {
-  return Number.isFinite(value) ? value.toFixed(3) : "invalid";
+  return Number.isFinite(value) ? value.toFixed(2) : "invalid";
 }
