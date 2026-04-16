@@ -50,7 +50,7 @@ export async function requestPreview(
 
 export async function commitMask(
   sessionId: string,
-  op: "union" | "invert" | "reset",
+  op: "isolate" | "invert" | "reset",
 ): Promise<CommitResponse> {
   const response = await fetch(`/api/sessions/${sessionId}/commit`, {
     method: "POST",

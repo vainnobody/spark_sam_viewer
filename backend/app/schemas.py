@@ -38,7 +38,7 @@ class PreviewRequest(BaseModel):
 
 
 class CommitRequest(BaseModel):
-    op: Literal["union", "invert", "reset"]
+    op: Literal["isolate", "invert", "reset"]
 
 
 class SessionCreated(BaseModel):

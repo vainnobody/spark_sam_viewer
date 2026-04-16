@@ -26,7 +26,6 @@ class SessionState:
     upload_path: Path
     gaussians: GaussianCloud
     current_visible_mask: np.ndarray
-    accumulated_mask: np.ndarray
     preview_mask: np.ndarray | None = None
 
 
@@ -59,7 +58,6 @@ class SessionStore:
             upload_path=upload_path,
             gaussians=gaussians,
             current_visible_mask=visible_mask.copy(),
-            accumulated_mask=np.zeros_like(visible_mask),
         )
         with self._lock:
             self._sessions[session_id] = state
@@ -88,8 +86,7 @@ class SessionStore:
                     "Refresh the view and retry."
                 )
 
-            visible_points = state.gaussians.xyz[state.current_visible_mask]
-            pixels, depth, inside, depth_buffer = build_depth_buffer(payload.camera, visible_points)
+            pixels, depth, inside, depth_buffer = build_depth_buffer(payload.camera, state.gaussians.xyz)
             visible_on_screen = compute_visible_mask(pixels, depth, inside, depth_buffer)
 
             prompt_world = np.asarray([point.world for point in payload.points], dtype=np.float32)
@@ -146,18 +143,15 @@ class SessionStore:
         with self._lock:
             if op == "reset":
                 state.current_visible_mask = np.ones_like(state.current_visible_mask)
-                state.accumulated_mask = np.zeros_like(state.accumulated_mask)
                 state.preview_mask = None
             else:
                 if state.preview_mask is None:
                     raise ValueError("No preview mask available. Run preview first.")
-                preview = state.preview_mask & state.current_visible_mask
-                if op == "union":
-                    state.accumulated_mask = state.accumulated_mask | preview
-                    state.current_visible_mask = state.accumulated_mask.copy()
+                preview = state.preview_mask.copy()
+                if op == "isolate":
+                    state.current_visible_mask = preview
                 elif op == "invert":
                     state.current_visible_mask = state.current_visible_mask & (~preview)
-                    state.accumulated_mask = state.accumulated_mask & state.current_visible_mask
                 else:
                     raise ValueError(f"Unsupported commit op: {op}")
                 state.preview_mask = None
@@ -188,14 +182,13 @@ class SessionStore:
         visible_on_screen: np.ndarray,
         mask_2d: np.ndarray,
     ) -> np.ndarray:
-        visible_indices = np.nonzero(state.current_visible_mask)[0]
         preview_mask = np.zeros_like(state.current_visible_mask)
         candidate = visible_on_screen.copy()
         if np.any(candidate):
             u = visible_pixels[candidate, 0]
             v = visible_pixels[candidate, 1]
             hits = mask_2d[v, u] > 0
-            preview_mask[visible_indices[np.nonzero(candidate)[0][hits]]] = True
+            preview_mask[np.nonzero(candidate)[0][hits]] = True
         return preview_mask
 
     def _render_preview_image(

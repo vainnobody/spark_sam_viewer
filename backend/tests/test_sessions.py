@@ -1,40 +1,100 @@
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.prompt_pixels import resolve_sam_prompt_pixels
+from app.bitset import decode_mask
+from app.sessions import SessionState, SessionStore
 
 
-def test_resolve_sam_prompt_pixels_prefers_clicked_pixels_when_close():
-    projected = np.asarray([[120, 80]], dtype=np.int32)
-    valid = np.asarray([True])
-    clicked = np.asarray([[126.2, 84.8]], dtype=np.float32)
-
-    pixels, indices = resolve_sam_prompt_pixels(projected, valid, clicked, 400, 300)
-
-    assert indices.tolist() == [0]
-    assert pixels.tolist() == [[126, 85]]
-
-
-def test_resolve_sam_prompt_pixels_falls_back_to_projection_when_far():
-    projected = np.asarray([[120, 80]], dtype=np.int32)
-    valid = np.asarray([True])
-    clicked = np.asarray([[260.0, 190.0]], dtype=np.float32)
-
-    pixels, indices = resolve_sam_prompt_pixels(projected, valid, clicked, 400, 300)
-
-    assert indices.tolist() == [0]
-    assert pixels.tolist() == [[120, 80]]
+def make_store_with_state(
+    current_visible_mask: np.ndarray,
+    preview_mask: np.ndarray | None = None,
+) -> tuple[SessionStore, SessionState]:
+    store = SessionStore()
+    session_id = "test-session"
+    state = SessionState(
+        session_id=session_id,
+        upload_path=Path("dummy.ply"),
+        gaussians=SimpleNamespace(
+            xyz=np.zeros((current_visible_mask.size, 3), dtype=np.float32),
+            count=int(current_visible_mask.size),
+        ),
+        current_visible_mask=current_visible_mask.copy(),
+        preview_mask=None if preview_mask is None else preview_mask.copy(),
+    )
+    store._sessions[session_id] = state
+    return store, state
 
 
-def test_resolve_sam_prompt_pixels_skips_invalid_points():
-    projected = np.asarray([[120, 80], [40, 22]], dtype=np.int32)
-    valid = np.asarray([False, True])
+def test_commit_isolate_replaces_visible_mask_with_preview():
+    store, _state = make_store_with_state(
+        np.asarray([True, False, True, True]),
+        np.asarray([False, True, False, True]),
+    )
 
-    pixels, indices = resolve_sam_prompt_pixels(projected, valid, None, 400, 300)
+    response = store.commit("test-session", "isolate")
 
-    assert indices.tolist() == [1]
-    assert pixels.tolist() == [[40, 22]]
+    decoded = decode_mask(response["visibleMaskBitset"], 4)
+    assert response["visibleCount"] == 2
+    assert decoded.tolist() == [False, True, False, True]
+
+
+def test_commit_invert_removes_preview_from_current_visible_mask():
+    store, _state = make_store_with_state(
+        np.asarray([True, True, False, True]),
+        np.asarray([False, True, True, False]),
+    )
+
+    response = store.commit("test-session", "invert")
+
+    decoded = decode_mask(response["visibleMaskBitset"], 4)
+    assert response["visibleCount"] == 2
+    assert decoded.tolist() == [True, False, False, True]
+
+
+def test_commit_reset_restores_full_visibility():
+    store, state = make_store_with_state(
+        np.asarray([True, False, False, True]),
+        np.asarray([False, True, False, False]),
+    )
+
+    response = store.commit("test-session", "reset")
+
+    decoded = decode_mask(response["visibleMaskBitset"], 4)
+    assert response["visibleCount"] == 4
+    assert decoded.tolist() == [True, True, True, True]
+    assert state.preview_mask is None
+
+
+def test_commit_requires_preview_for_isolate_and_invert():
+    store, _state = make_store_with_state(np.asarray([True, True, True]))
+
+    with pytest.raises(ValueError, match="Run preview first"):
+        store.commit("test-session", "isolate")
+
+    with pytest.raises(ValueError, match="Run preview first"):
+        store.commit("test-session", "invert")
+
+
+def test_map_mask_to_gaussians_uses_full_point_cloud_indices():
+    store, state = make_store_with_state(np.asarray([True, False, True]))
+
+    preview_mask = store._map_mask_to_gaussians(
+        state,
+        visible_pixels=np.asarray([[0, 0], [1, 0], [0, 1]], dtype=np.int32),
+        visible_on_screen=np.asarray([True, True, False]),
+        mask_2d=np.asarray(
+            [
+                [0, 1],
+                [0, 0],
+            ],
+            dtype=np.uint8,
+        ),
+    )
+
+    assert preview_mask.tolist() == [False, True, False]

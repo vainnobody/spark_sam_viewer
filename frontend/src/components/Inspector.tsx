@@ -15,7 +15,7 @@ type InspectorProps = {
   onChooseFile: () => void;
   onPromptModeChange: (mode: PromptMode) => void;
   onPreview: () => void;
-  onCommit: (op: "union" | "invert" | "reset") => void;
+  onCommit: (op: "isolate" | "invert" | "reset") => void;
   onClearPrompts: () => void;
   sessionId: string | null;
 };
@@ -48,7 +48,7 @@ export function Inspector(props: InspectorProps) {
         <h1>3DGS Object Cut</h1>
         <p className="hero-copy">
           Load one Gaussian PLY, click positive and negative prompts in 3D, preview the
-          projected mask, then keep or subtract the result without reloading the splat field.
+          projected mask, then isolate or subtract the result without reloading the splat field.
         </p>
       </div>
 
@@ -98,8 +98,8 @@ export function Inspector(props: InspectorProps) {
       <div className="inspector__section">
         <p className="section-label">Selection flow</p>
         <div className="action-grid">
-          <button disabled={!sessionReady || !hasPreview || busyCommit} onClick={() => onCommit("union")}>
-            {busyCommit ? "Applying…" : "Union"}
+          <button disabled={!sessionReady || !hasPreview || busyCommit} onClick={() => onCommit("isolate")}>
+            {busyCommit ? "Applying…" : "Isolate"}
           </button>
           <button disabled={!sessionReady || !hasPreview || busyCommit} onClick={() => onCommit("invert")}>
             Invert

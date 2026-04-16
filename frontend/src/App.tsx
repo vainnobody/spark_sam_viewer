@@ -92,7 +92,7 @@ export default function App() {
     }
   };
 
-  const handleCommit = async (op: "union" | "invert" | "reset") => {
+  const handleCommit = async (op: "isolate" | "invert" | "reset") => {
     if (!sessionId || !workspaceRef.current) {
       return;
     }
@@ -109,7 +109,7 @@ export default function App() {
       setStatus(
         op === "reset"
           ? "Selection reset. Full visibility restored."
-          : `Applied ${op}. ${response.visibleCount.toLocaleString()} splats remain visible.`,
+          : `${op === "isolate" ? "Applied isolate mask" : `Applied ${op}`}. ${response.visibleCount.toLocaleString()} splats remain visible.`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Commit failed.";

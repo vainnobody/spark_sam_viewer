@@ -113,14 +113,14 @@ The frontend dev server runs on `http://127.0.0.1:5173` by default and proxies `
 3. Click the scene to place positive or negative 3D prompts.
 4. Press `Preview` to render the current view and run SAM3.
 5. Inspect the 2D preview in the right panel.
-6. Press `Union` to keep the previewed object, `Invert` to subtract it, or `Reset` to restore the full scene.
+6. Press `Isolate` to keep only the previewed object visible, `Invert` to subtract it, or `Reset` to restore the full scene.
 7. Download the current mask or filtered `.ply`.
 
 ## Notes
 
 - The right panel preview is view-dependent by design.
 - The preview mask is generated from the current Spark canvas image, then mapped back onto the uploaded 3DGS points with projective visibility.
-- `Union` builds the kept selection over time.
+- `Isolate` hides every splat outside the current preview mask.
 - `Invert` removes the current preview from the visible selection.
 - `Reset` restores full visibility and clears the committed selection state.
 
