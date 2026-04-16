@@ -117,6 +117,7 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
       canvas,
       antialias: false,
       alpha: true,
+      preserveDrawingBuffer: true,
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(new THREE.Color("#06131c"), 1);
@@ -290,12 +291,14 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
       },
 
       buildCameraPayload() {
-        const { camera, renderer } = sceneRef.current;
-        if (!camera || !renderer) {
+        const { camera, renderer, controls, scene } = sceneRef.current;
+        if (!camera || !renderer || !controls || !scene) {
           return null;
         }
+        renderCurrentView(renderer, scene, camera, controls);
+
         const size = new THREE.Vector2();
-        renderer.getSize(size);
+        renderer.getDrawingBufferSize(size);
         camera.updateMatrixWorld();
         camera.updateProjectionMatrix();
         return {
@@ -318,11 +321,25 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
       },
 
       captureViewImage() {
-        const canvas = canvasRef.current;
-        if (!canvas) {
+        const { renderer, scene, camera, controls, markers } = sceneRef.current;
+        if (!renderer || !scene || !camera || !controls) {
           return null;
         }
-        return canvas.toDataURL("image/jpeg", 0.9);
+
+        const markersWereVisible = markers?.visible ?? false;
+        if (markers) {
+          markers.visible = false;
+        }
+
+        try {
+          renderCurrentView(renderer, scene, camera, controls);
+          return renderer.domElement.toDataURL("image/jpeg", 0.9);
+        } finally {
+          if (markers) {
+            markers.visible = markersWereVisible;
+          }
+          renderCurrentView(renderer, scene, camera, controls);
+        }
       },
 
       applyVisibleMask(encoded: string) {
@@ -371,6 +388,18 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
     </div>
   );
 });
+
+function renderCurrentView(
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+  controls: SparkControls,
+) {
+  controls.update(camera);
+  camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();
+  renderer.render(scene, camera);
+}
 
 function extractOriginalOpacity(mesh: MutableSplatMesh, count: number): Float32Array {
   const opacity = new Float32Array(count);
