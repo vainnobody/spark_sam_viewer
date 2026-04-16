@@ -27,6 +27,7 @@ class CameraPayload(BaseModel):
 
 class PromptPoint(BaseModel):
     world: list[float] = Field(min_length=3, max_length=3)
+    screen: list[float] | None = Field(default=None, min_length=2, max_length=2)
     label: Literal[1, -1]
 
 

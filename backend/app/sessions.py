@@ -15,6 +15,7 @@ from .bitset import encode_mask
 from .camera import build_depth_buffer, compute_visible_mask, project_world_to_pixels
 from .config import SETTINGS
 from .gaussian_cloud import GaussianCloud
+from .prompt_pixels import resolve_sam_prompt_pixels
 from .sam_predictor import SamPredictor
 from .schemas import PreviewRequest
 
@@ -36,7 +37,6 @@ def _decode_image_data_url(data_url: str) -> np.ndarray:
     image_bytes = base64.b64decode(payload.encode("ascii"))
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     return np.asarray(image, dtype=np.uint8)
-
 
 class SessionStore:
     def __init__(self) -> None:
@@ -94,12 +94,32 @@ class SessionStore:
 
             prompt_world = np.asarray([point.world for point in payload.points], dtype=np.float32)
             prompt_labels = np.asarray([point.label for point in payload.points], dtype=np.int32)
-            prompt_pixels, prompt_depth, prompt_inside = project_world_to_pixels(payload.camera, prompt_world)
-            prompt_visible = compute_visible_mask(prompt_pixels, prompt_depth, prompt_inside, depth_buffer, tolerance=5e-3)
+            prompt_clicked_pixels = None
+            if any(point.screen is not None for point in payload.points):
+                prompt_clicked_pixels = np.asarray(
+                    [
+                        point.screen if point.screen is not None else [np.nan, np.nan]
+                        for point in payload.points
+                    ],
+                    dtype=np.float32,
+                )
+
+            prompt_projected_pixels, prompt_depth, prompt_inside = project_world_to_pixels(
+                payload.camera, prompt_world
+            )
+            prompt_visible = compute_visible_mask(
+                prompt_projected_pixels, prompt_depth, prompt_inside, depth_buffer, tolerance=5e-3
+            )
             prompt_valid = prompt_inside & prompt_visible
 
-            prompt_pixels = prompt_pixels[prompt_valid]
-            prompt_labels = prompt_labels[prompt_valid]
+            prompt_pixels, prompt_indices = resolve_sam_prompt_pixels(
+                prompt_projected_pixels,
+                prompt_valid,
+                prompt_clicked_pixels,
+                payload.camera.width,
+                payload.camera.height,
+            )
+            prompt_labels = prompt_labels[prompt_indices]
             if prompt_pixels.shape[0] == 0:
                 raise ValueError("No prompt points are visible in the current view.")
 

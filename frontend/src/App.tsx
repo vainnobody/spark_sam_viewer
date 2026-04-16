@@ -49,13 +49,18 @@ export default function App() {
     }
   };
 
-  const handlePromptAdd = (world: [number, number, number], label: 1 | -1) => {
+  const handlePromptAdd = (
+    world: [number, number, number],
+    label: 1 | -1,
+    screen: [number, number],
+  ) => {
     setPreviewImage(null);
     setPrompts((current) => [
       ...current,
       {
         id: createPromptId(),
         world,
+        screen,
         label,
       },
     ]);

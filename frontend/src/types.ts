@@ -3,6 +3,7 @@ export type PromptMode = "positive" | "negative";
 export type PromptPoint = {
   id: string;
   world: [number, number, number];
+  screen: [number, number];
   label: 1 | -1;
 };
 

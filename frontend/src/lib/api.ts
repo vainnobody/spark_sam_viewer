@@ -40,6 +40,7 @@ export async function requestPreview(
       imageDataUrl,
       points: points.map((point) => ({
         world: point.world,
+        screen: point.screen,
         label: point.label,
       })),
     }),

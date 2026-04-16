@@ -17,7 +17,7 @@ import { matrixToRows } from "../lib/camera";
 type WorkspaceProps = {
   promptMode: PromptMode;
   prompts: PromptPoint[];
-  onPromptAdd: (world: [number, number, number], label: 1 | -1) => void;
+  onPromptAdd: (world: [number, number, number], label: 1 | -1, screen: [number, number]) => void;
   onSceneError: (message: string | null) => void;
   onSceneReady: (count: number) => void;
 };
@@ -206,8 +206,8 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
 
     const onPointerDown = (event: PointerEvent) => {
       try {
-        const { camera, scene, mesh } = sceneRef.current;
-        if (!camera || !scene || !mesh) {
+        const { camera, scene, mesh, renderer } = sceneRef.current;
+        if (!camera || !scene || !mesh || !renderer) {
           return;
         }
         const rect = canvas.getBoundingClientRect();
@@ -221,6 +221,18 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
         if (hits.length === 0) {
           return;
         }
+        const bufferSize = new THREE.Vector2();
+        renderer.getDrawingBufferSize(bufferSize);
+        const screenX = THREE.MathUtils.clamp(
+          ((event.clientX - rect.left) / rect.width) * bufferSize.x,
+          0,
+          Math.max(0, bufferSize.x - 1),
+        );
+        const screenY = THREE.MathUtils.clamp(
+          ((event.clientY - rect.top) / rect.height) * bufferSize.y,
+          0,
+          Math.max(0, bufferSize.y - 1),
+        );
         const point = hits[0]?.point;
         if (
           !point
@@ -234,6 +246,7 @@ export const SplatWorkspace = forwardRef<WorkspaceHandle, WorkspaceProps>(functi
         onPromptAdd(
           [point.x, point.y, point.z],
           promptMode === "positive" ? 1 : -1,
+          [screenX, screenY],
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown click interaction error.";
