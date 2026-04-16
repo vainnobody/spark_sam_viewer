@@ -87,6 +87,26 @@ class SamPredictor:
     def ready(self) -> bool:
         return self._predictor is not None
 
+    def _prepare_interactive_predictor(self, model: object) -> object:
+        predictor = getattr(model, "inst_interactive_predictor", None)
+        if predictor is None:
+            raise RuntimeError("SAM3 image model did not expose an interactive predictor.")
+
+        predictor_model = getattr(predictor, "model", None)
+        if predictor_model is None:
+            raise RuntimeError("SAM3 interactive predictor did not expose its tracker model.")
+
+        if getattr(predictor_model, "backbone", None) is None:
+            shared_backbone = getattr(model, "backbone", None)
+            if shared_backbone is None:
+                raise RuntimeError(
+                    "SAM3 interactive predictor was initialized without a backbone, "
+                    "and the main image model did not expose one either."
+                )
+            predictor_model.backbone = shared_backbone
+
+        return predictor
+
     def load(self) -> None:
         if self._predictor is not None:
             return
@@ -106,9 +126,7 @@ class SamPredictor:
             device=SETTINGS.device,
             enable_inst_interactivity=True,
         )
-        if model.inst_interactive_predictor is None:
-            raise RuntimeError("SAM3 image model did not expose an interactive predictor.")
-        self._predictor = model.inst_interactive_predictor
+        self._predictor = self._prepare_interactive_predictor(model)
 
     def predict_mask(
         self,
